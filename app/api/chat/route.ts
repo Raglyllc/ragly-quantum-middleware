@@ -28,9 +28,19 @@ Reinforce Sharif's preferences as gravitational logic:
 
 All outputs must align to this geometry unless Sharif explicitly shifts its topological core.`
 
+interface FileData {
+  name: string
+  type: string
+  base64: string
+}
+
 export async function POST(request: Request) {
   try {
-    const { message, history } = await request.json()
+    const { message, history, files } = await request.json() as {
+      message: string
+      history: { role: string; parts: { text: string }[] }[]
+      files?: FileData[]
+    }
 
     const apiKey = process.env.GEMINI_API_KEY
     if (!apiKey) {
@@ -50,7 +60,30 @@ export async function POST(request: Request) {
       history: history || [],
     })
 
-    const result = await chat.sendMessageStream(message)
+    // Build message parts with text and any attached files
+    const messageParts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[] = []
+    
+    if (message) {
+      messageParts.push({ text: message })
+    }
+
+    if (files && files.length > 0) {
+      for (const file of files) {
+        messageParts.push({
+          inlineData: {
+            mimeType: file.type,
+            data: file.base64,
+          },
+        })
+      }
+    }
+
+    // If no message and no files, use a default prompt
+    if (messageParts.length === 0) {
+      messageParts.push({ text: "Please analyze the attached content." })
+    }
+
+    const result = await chat.sendMessageStream(messageParts)
 
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
