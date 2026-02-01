@@ -1,39 +1,25 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
-import { streamMessage, getChatSession } from "@/lib/gemini-service"
 import type { ChatMessage } from "@/lib/types"
 import { BotIcon, UserIcon, SendIcon, LoadingIcon } from "@/components/icons"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
+interface GeminiHistoryItem {
+  role: "user" | "model"
+  parts: { text: string }[]
+}
+
 export default function Page() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [history, setHistory] = useState<GeminiHistoryItem[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isInitialized, setIsInitialized] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    console.log("[v0] Initializing RAGLY...")
-    console.log("[v0] API Key exists:", !!process.env.NEXT_PUBLIC_GEMINI_API_KEY)
-
-    try {
-      getChatSession()
-      console.log("[v0] Chat session initialized successfully")
-      setIsInitialized(true)
-      setError(null)
-    } catch (e) {
-      console.error("[v0] Initialization error:", e)
-      const errorMessage = e instanceof Error ? e.message : "An unknown error occurred during initialization."
-      setError(errorMessage)
-      setIsInitialized(false)
-    }
-  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -50,11 +36,6 @@ export default function Page() {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
-    if (!isInitialized) {
-      setError("Chat session not initialized. Please check your API key.")
-      return
-    }
-
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
@@ -67,21 +48,60 @@ export default function Page() {
     setError(null)
 
     const modelMessageId = (Date.now() + 1).toString()
-
     setMessages((prev) => [...prev, { id: modelMessageId, role: "model", content: "", isStreaming: true }])
 
     try {
-      console.log("[v0] Sending message:", currentInput)
-      const stream = await streamMessage(currentInput)
-      let fullResponse = ""
-      for await (const chunk of stream) {
-        fullResponse += chunk.text
-        setMessages((prev) => prev.map((msg) => (msg.id === modelMessageId ? { ...msg, content: fullResponse } : msg)))
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: currentInput, history }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to send message")
       }
+
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error("No response stream")
+
+      const decoder = new TextDecoder()
+      let fullResponse = ""
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split("\n")
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6)
+            if (data === "[DONE]") continue
+
+            try {
+              const parsed = JSON.parse(data)
+              fullResponse += parsed.text
+              setMessages((prev) =>
+                prev.map((msg) => (msg.id === modelMessageId ? { ...msg, content: fullResponse } : msg))
+              )
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+
       setMessages((prev) => prev.map((msg) => (msg.id === modelMessageId ? { ...msg, isStreaming: false } : msg)))
-      console.log("[v0] Message completed")
+
+      // Update history for context
+      setHistory((prev) => [
+        ...prev,
+        { role: "user", parts: [{ text: currentInput }] },
+        { role: "model", parts: [{ text: fullResponse }] },
+      ])
     } catch (e) {
-      console.error("[v0] Message error:", e)
       const errorMessage = e instanceof Error ? e.message : "An unknown error occurred."
       setError(`Error: ${errorMessage}`)
       setMessages((prev) => prev.filter((msg) => msg.id !== modelMessageId))
@@ -141,18 +161,18 @@ export default function Page() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault()
-                  handleSendMessage(e as any)
+                  handleSendMessage(e as unknown as React.FormEvent)
                 }
               }}
               placeholder="Interact with RAGLY..."
               className="flex-1 bg-transparent focus:outline-none resize-none p-2 placeholder-gray-500 max-h-40"
               rows={1}
-              disabled={isLoading || !isInitialized}
+              disabled={isLoading}
               aria-label="Chat input"
             />
             <button
               type="submit"
-              disabled={isLoading || !input.trim() || !isInitialized}
+              disabled={isLoading || !input.trim()}
               className="p-2 mt-1 rounded-lg text-cyan-400 hover:bg-cyan-400/20 disabled:text-gray-600 disabled:hover:bg-transparent transition-colors"
               aria-label="Send message"
             >
