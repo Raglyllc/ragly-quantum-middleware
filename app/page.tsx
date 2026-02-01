@@ -111,11 +111,11 @@ export default function Page() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-[#0a0a0f] text-gray-200">
-      <header className="p-4 border-b border-gray-800 shadow-lg bg-[#101018]/80 backdrop-blur-sm sticky top-0 z-10">
+    <div className="flex flex-col h-screen bg-background text-foreground">
+      <header className="p-4 border-b border-border shadow-lg bg-card/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-2xl font-bold text-cyan-400">RAGLY</h1>
-          <p className="text-sm text-gray-400">Quantum Intelligence Middleware</p>
+          <h1 className="text-2xl font-bold text-primary">RAGLY</h1>
+          <p className="text-sm text-muted-foreground">Quantum Intelligence Middleware</p>
         </div>
       </header>
 
@@ -124,20 +124,20 @@ export default function Page() {
           {messages.map((message) => (
             <div key={message.id} className={`flex items-start gap-4 ${message.role === "user" ? "justify-end" : ""}`}>
               {message.role === "model" && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                   <BotIcon />
                 </div>
               )}
               <div
-                className={`max-w-2xl rounded-xl px-5 py-3 shadow-md ${message.role === "user" ? "bg-purple-900/50 text-gray-100" : "bg-gray-800/70 text-gray-300"}`}
+                className={`max-w-2xl rounded-xl px-5 py-3 shadow-md ${message.role === "user" ? "bg-secondary/50 text-secondary-foreground" : "bg-muted text-card-foreground"}`}
               >
                 <article className="markdown-content">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-                  {message.isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 animate-pulse" />}
+                  {message.isStreaming && <span className="inline-block w-2 h-4 ml-1 bg-primary animate-pulse" />}
                 </article>
               </div>
               {message.role === "user" && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                   <UserIcon />
                 </div>
               )}
@@ -147,12 +147,12 @@ export default function Page() {
         </div>
       </main>
 
-      <footer className="p-4 border-t border-gray-800 bg-[#101018]/80 backdrop-blur-sm sticky bottom-0">
+      <footer className="p-4 border-t border-border bg-card/80 backdrop-blur-sm sticky bottom-0">
         <div className="max-w-4xl mx-auto">
-          {error && <p className="text-red-500 text-center mb-2 text-sm">{error}</p>}
+          {error && <p className="text-destructive text-center mb-2 text-sm">{error}</p>}
           <form
             onSubmit={handleSendMessage}
-            className="flex items-start gap-3 bg-gray-800/50 rounded-xl p-2 border border-gray-700 focus-within:border-cyan-400 transition-colors"
+            className="flex items-start gap-3 bg-muted/50 rounded-xl p-2 border border-border focus-within:border-primary transition-colors"
           >
             <textarea
               ref={textAreaRef}
@@ -165,7 +165,7 @@ export default function Page() {
                 }
               }}
               placeholder="Interact with RAGLY..."
-              className="flex-1 bg-transparent focus:outline-none resize-none p-2 placeholder-gray-500 max-h-40"
+              className="flex-1 bg-transparent focus:outline-none resize-none p-2 placeholder-muted-foreground max-h-40 text-foreground"
               rows={1}
               disabled={isLoading}
               aria-label="Chat input"
@@ -173,7 +173,7 @@ export default function Page() {
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="p-2 mt-1 rounded-lg text-cyan-400 hover:bg-cyan-400/20 disabled:text-gray-600 disabled:hover:bg-transparent transition-colors"
+              className="p-2 mt-1 rounded-lg text-primary hover:bg-primary/20 disabled:text-muted-foreground disabled:hover:bg-transparent transition-colors"
               aria-label="Send message"
             >
               {isLoading ? <LoadingIcon /> : <SendIcon />}
