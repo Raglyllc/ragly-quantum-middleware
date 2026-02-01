@@ -254,7 +254,7 @@ export default function Page() {
                 Using Topological Reasoning System
               </p>
               <p className="text-sm text-muted-foreground">
-                Powered by {provider === "openai" ? "OpenAI GPT-4o" : "Google Gemini 2.5 Flash"}. Start a conversation or attach files for analysis.
+                Powered by {provider === "openai" ? "GPT-4o" : "Gemini 2.5 Flash"}. Start a conversation or attach files for analysis.
               </p>
             </div>
           )}
