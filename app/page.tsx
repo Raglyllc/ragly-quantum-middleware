@@ -250,8 +250,11 @@ export default function Page() {
                 <BotIcon />
               </div>
               <h2 className="text-xl font-semibold text-foreground mb-2">Welcome to RAGLY</h2>
-              <p className="text-muted-foreground max-w-md">
-                Using {provider === "openai" ? "OpenAI GPT-4o" : "Google Gemini 2.5 Flash"}. Start a conversation or attach files for analysis.
+              <p className="text-muted-foreground max-w-md mb-2">
+                Using Topological Reasoning System
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Powered by {provider === "openai" ? "OpenAI GPT-4o" : "Google Gemini 2.5 Flash"}. Start a conversation or attach files for analysis.
               </p>
             </div>
           )}
