@@ -13,6 +13,11 @@ interface GeminiHistoryItem {
   parts: { text: string }[]
 }
 
+interface OpenAIHistoryItem {
+  role: "user" | "assistant"
+  content: string
+}
+
 interface UploadedFile {
   name: string
   type: string
@@ -21,16 +26,27 @@ interface UploadedFile {
   preview?: string
 }
 
+type AIProvider = "gemini" | "openai"
+
 export default function Page() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [history, setHistory] = useState<GeminiHistoryItem[]>([])
+  const [geminiHistory, setGeminiHistory] = useState<GeminiHistoryItem[]>([])
+  const [openaiHistory, setOpenaiHistory] = useState<OpenAIHistoryItem[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [provider, setProvider] = useState<AIProvider>("gemini")
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const clearChat = () => {
+    setMessages([])
+    setGeminiHistory([])
+    setOpenaiHistory([])
+    setError(null)
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -74,7 +90,7 @@ export default function Page() {
         const base64 = result.split(",")[1]
         resolve(base64)
       }
-      reader.onerror = (error) => reject(error)
+      reader.onerror = (err) => reject(err)
     })
   }
 
@@ -125,10 +141,13 @@ export default function Page() {
         base64: f.base64,
       }))
 
-      const response = await fetch("/api/chat", {
+      const apiEndpoint = provider === "openai" ? "/api/chat/openai" : "/api/chat"
+      const historyToSend = provider === "openai" ? openaiHistory : geminiHistory
+
+      const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: currentInput, history, files: filesToSend }),
+        body: JSON.stringify({ message: currentInput, history: historyToSend, files: filesToSend }),
       })
 
       if (!response.ok) {
@@ -169,14 +188,22 @@ export default function Page() {
 
       setMessages((prev) => prev.map((msg) => (msg.id === modelMessageId ? { ...msg, isStreaming: false } : msg)))
 
-      // Update history for context
-      setHistory((prev) => [
-        ...prev,
-        { role: "user", parts: [{ text: currentInput }] },
-        { role: "model", parts: [{ text: fullResponse }] },
-      ])
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : "An unknown error occurred."
+      // Update history based on provider
+      if (provider === "openai") {
+        setOpenaiHistory((prev) => [
+          ...prev,
+          { role: "user", content: currentInput },
+          { role: "assistant", content: fullResponse },
+        ])
+      } else {
+        setGeminiHistory((prev) => [
+          ...prev,
+          { role: "user", parts: [{ text: currentInput }] },
+          { role: "model", parts: [{ text: fullResponse }] },
+        ])
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred."
       setError(`Error: ${errorMessage}`)
       setMessages((prev) => prev.filter((msg) => msg.id !== modelMessageId))
     } finally {
@@ -187,14 +214,47 @@ export default function Page() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground">
       <header className="p-4 border-b border-border shadow-lg bg-card/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto flex items-center gap-3">
-          <Image src="/logo.png" alt="RAGLY Logo" width={140} height={48} className="h-10 w-auto" priority />
-          <p className="text-sm text-muted-foreground hidden sm:block">Quantum Intelligence Middleware</p>
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Image src="/logo.png" alt="RAGLY Logo" width={140} height={48} className="h-10 w-auto" priority />
+            <p className="text-sm text-muted-foreground hidden sm:block">Quantum Intelligence Middleware</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={provider}
+              onChange={(e) => setProvider(e.target.value as AIProvider)}
+              className="bg-muted border border-border rounded-lg px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-primary"
+              disabled={isLoading}
+              aria-label="Select AI provider"
+            >
+              <option value="gemini">Gemini</option>
+              <option value="openai">OpenAI</option>
+            </select>
+            <button
+              type="button"
+              onClick={clearChat}
+              className="px-3 py-1.5 text-sm bg-muted border border-border rounded-lg text-muted-foreground hover:text-foreground hover:border-primary transition-colors"
+              disabled={isLoading}
+            >
+              Clear
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="flex-1 overflow-y-auto chat-message-container">
         <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-8">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-64 text-center">
+              <div className="w-16 h-16 mb-4 rounded-full bg-muted flex items-center justify-center">
+                <BotIcon />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground mb-2">Welcome to RAGLY</h2>
+              <p className="text-muted-foreground max-w-md">
+                Using {provider === "openai" ? "OpenAI GPT-4o" : "Google Gemini 2.5 Flash"}. Start a conversation or attach files for analysis.
+              </p>
+            </div>
+          )}
           {messages.map((message) => (
             <div key={message.id} className={`flex items-start gap-4 ${message.role === "user" ? "justify-end" : ""}`}>
               {message.role === "model" && (
