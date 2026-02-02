@@ -36,10 +36,11 @@ interface FileData {
 
 export async function POST(request: Request) {
   try {
-    const { message, history, files } = await request.json() as {
+    const { message, history, files, modelType } = await request.json() as {
       message: string
       history: { role: string; parts: { text: string }[] }[]
       files?: FileData[]
+      modelType?: "flash" | "pro"
     }
 
     const apiKey = process.env.GEMINI_API_KEY
@@ -50,9 +51,13 @@ export async function POST(request: Request) {
       )
     }
 
+    // Use Gemini 2.5 Flash for fast topological corrections
+    // Use Gemini 2.5 Pro for complex reasoning nodes
+    const modelName = modelType === "pro" ? "gemini-2.5-pro" : "gemini-2.5-flash"
+
     const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: modelName,
       systemInstruction: SYSTEM_INSTRUCTION,
     })
 
