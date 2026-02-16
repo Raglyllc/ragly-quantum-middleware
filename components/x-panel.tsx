@@ -48,6 +48,7 @@ export function XPanel({
   const [users, setUsers] = useState<Record<string, UserData>>({})
   const [timelineLoading, setTimelineLoading] = useState(false)
   const [mentionsLoading, setMentionsLoading] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
 
   const fetchTimeline = async () => {
     setTimelineLoading(true)
@@ -56,6 +57,12 @@ export function XPanel({
       const res = await fetch("/api/x/timeline")
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to load timeline")
+      if (data.unavailable) {
+        setUnavailable(true)
+        setTimelineTweets([])
+        return
+      }
+      setUnavailable(false)
       setTimelineTweets(data.data || [])
       if (data.includes?.users) {
         const userMap: Record<string, UserData> = { ...users }
@@ -76,6 +83,12 @@ export function XPanel({
       const res = await fetch("/api/x/mentions")
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to load mentions")
+      if (data.unavailable) {
+        setUnavailable(true)
+        setMentionsTweets([])
+        return
+      }
+      setUnavailable(false)
       setMentionsTweets(data.data || [])
       if (data.includes?.users) {
         const userMap: Record<string, UserData> = { ...users }
@@ -168,6 +181,18 @@ export function XPanel({
               <div className="flex items-center justify-center py-12">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               </div>
+            ) : unavailable ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                <p>X integration is currently unavailable.</p>
+                <a
+                  href="https://x.com/ahayahsharif"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline mt-1 inline-block"
+                >
+                  Visit @ahayahsharif on X
+                </a>
+              </div>
             ) : timelineTweets.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">
                 Click the refresh button above to load your tweets.
@@ -199,6 +224,18 @@ export function XPanel({
             {mentionsLoading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : unavailable ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                <p>X integration is currently unavailable.</p>
+                <a
+                  href="https://x.com/ahayahsharif"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline mt-1 inline-block"
+                >
+                  Visit @ahayahsharif on X
+                </a>
               </div>
             ) : mentionsTweets.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">

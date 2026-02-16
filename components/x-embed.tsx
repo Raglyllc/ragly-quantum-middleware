@@ -37,6 +37,7 @@ export function XEmbed({
   const [users, setUsers] = useState<Record<string, UserData>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [unavailable, setUnavailable] = useState(false)
   const [lastFetched, setLastFetched] = useState<Date | null>(null)
 
   const fetchTimeline = useCallback(async () => {
@@ -46,6 +47,12 @@ export function XEmbed({
       const res = await fetch("/api/x/timeline")
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to load timeline")
+      if (data.unavailable) {
+        setUnavailable(true)
+        setTweets([])
+        return
+      }
+      setUnavailable(false)
       setTweets(data.data || [])
       if (data.includes?.users) {
         const userMap: Record<string, UserData> = {}
@@ -140,7 +147,18 @@ export function XEmbed({
           </div>
         )}
 
-        {loading && tweets.length === 0 ? (
+        {unavailable ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            <a
+              href="https://x.com/ahayahsharif"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              Follow @ahayahsharif on X
+            </a>
+          </div>
+        ) : loading && tweets.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-2">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             <span className="text-xs text-muted-foreground">Loading tweets...</span>

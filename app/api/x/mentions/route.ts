@@ -1,6 +1,14 @@
-import { xFetch, getCachedUserId } from "@/lib/x-client"
+import { xFetch, getCachedUserId, hasXCredentials } from "@/lib/x-client"
 
 export async function GET() {
+  if (!hasXCredentials()) {
+    return Response.json({
+      data: [],
+      includes: {},
+      unavailable: true,
+    })
+  }
+
   try {
     const userId = await getCachedUserId()
 
@@ -25,9 +33,10 @@ export async function GET() {
 
     if (message.includes("401") || message.includes("403")) {
       return Response.json({
-        error: "auth_error",
-        message: "Authentication failed. Please verify your X API credentials.",
-      }, { status: 401 })
+        data: [],
+        includes: {},
+        unavailable: true,
+      })
     }
 
     return Response.json({ error: message }, { status: 500 })

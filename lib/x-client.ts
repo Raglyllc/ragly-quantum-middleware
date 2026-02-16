@@ -28,6 +28,15 @@ async function hmacSha1Base64(key: string, data: string): Promise<string> {
   return btoa(binary)
 }
 
+export function hasXCredentials(): boolean {
+  return !!(
+    process.env.X_API_KEY?.trim() &&
+    process.env.X_API_SECRET?.trim() &&
+    process.env.X_API_ACCESS_TOKEN?.trim() &&
+    process.env.X_API_ACCESS_TOKEN_SECRET?.trim()
+  )
+}
+
 async function generateOAuthHeader(
   method: string,
   url: string,
