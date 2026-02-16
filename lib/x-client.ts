@@ -33,10 +33,15 @@ async function generateOAuthHeader(
   url: string,
   queryParams: Record<string, string> = {}
 ): Promise<string> {
-  const consumerKey = process.env.X_API_KEY || ""
-  const consumerSecret = process.env.X_API_SECRET || ""
-  const accessToken = process.env.X_API_ACCESS_TOKEN || ""
-  const accessTokenSecret = process.env.X_API_ACCESS_TOKEN_SECRET || ""
+  const consumerKey = (process.env.X_API_KEY || "").trim()
+  const consumerSecret = (process.env.X_API_SECRET || "").trim()
+  const accessToken = (process.env.X_API_ACCESS_TOKEN || "").trim()
+  const accessTokenSecret = (process.env.X_API_ACCESS_TOKEN_SECRET || "").trim()
+
+  console.log("[v0] OAuth creds - consumerKey:", consumerKey.length, "chars, starts:", consumerKey.substring(0, 8))
+  console.log("[v0] OAuth creds - consumerSecret:", consumerSecret.length, "chars")
+  console.log("[v0] OAuth creds - accessToken:", accessToken.length, "chars, starts:", accessToken.substring(0, 12))
+  console.log("[v0] OAuth creds - accessTokenSecret:", accessTokenSecret.length, "chars")
 
   const oauthParams: Record<string, string> = {
     oauth_consumer_key: consumerKey,
@@ -57,7 +62,11 @@ async function generateOAuthHeader(
   const signatureBase = `${method.toUpperCase()}&${percentEncode(url)}&${percentEncode(sortedParamString)}`
   const signingKey = `${percentEncode(consumerSecret)}&${percentEncode(accessTokenSecret)}`
 
+  console.log("[v0] OAuth signatureBase:", signatureBase)
+  console.log("[v0] OAuth signingKey length:", signingKey.length)
+
   const signature = await hmacSha1Base64(signingKey, signatureBase)
+  console.log("[v0] OAuth signature:", signature)
   oauthParams.oauth_signature = signature
 
   const headerString = Object.keys(oauthParams)
