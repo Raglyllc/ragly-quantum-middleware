@@ -4,7 +4,8 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
 import type { ChatMessage } from "@/lib/types"
-import { BotIcon, UserIcon, SendIcon, LoadingIcon, PaperclipIcon, XIcon, FileIcon } from "@/components/icons"
+import { BotIcon, UserIcon, SendIcon, LoadingIcon, PaperclipIcon, XIcon, FileIcon, TwitterIcon } from "@/components/icons"
+import { XPanel } from "@/components/x-panel"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
@@ -37,6 +38,7 @@ export default function Page() {
   const [error, setError] = useState<string | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [provider, setProvider] = useState<AIProvider>("gemini")
+  const [isXPanelOpen, setIsXPanelOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textAreaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -220,6 +222,18 @@ export default function Page() {
             <p className="text-sm text-muted-foreground hidden sm:block">Quantum Intelligence Middleware</p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsXPanelOpen(!isXPanelOpen)}
+              className={`p-2 rounded-lg border transition-colors ${
+                isXPanelOpen
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-muted border-border text-muted-foreground hover:text-foreground hover:border-primary"
+              }`}
+              aria-label="Toggle X panel"
+            >
+              <TwitterIcon />
+            </button>
             <select
               value={provider}
               onChange={(e) => setProvider(e.target.value as AIProvider)}
@@ -370,6 +384,8 @@ export default function Page() {
           </form>
         </div>
       </footer>
+
+      <XPanel isOpen={isXPanelOpen} onClose={() => setIsXPanelOpen(false)} />
     </div>
   )
 }
