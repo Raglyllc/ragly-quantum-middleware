@@ -329,20 +329,6 @@ export default function Page() {
             >
               <CompareIcon />
             </button>
-            {/* X Panel */}
-            <button
-              type="button"
-              onClick={() => setIsXPanelOpen(!isXPanelOpen)}
-              className={`p-2 rounded-lg border transition-colors ${
-                isXPanelOpen
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-muted border-border text-muted-foreground hover:text-foreground hover:border-primary"
-              }`}
-              aria-label="Toggle X panel (Cmd+J)"
-              title="Toggle X panel (Cmd+J)"
-            >
-              <TwitterIcon />
-            </button>
             {/* Theme toggle */}
             <button
               type="button"
