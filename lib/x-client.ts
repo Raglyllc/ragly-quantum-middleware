@@ -131,6 +131,17 @@ export async function xFetch(
     throw new Error(`Rate limited. Try again in ~${waitMins} minute${waitMins > 1 ? "s" : ""}.`)
   }
 
+  // Handle OAuth permission errors
+  if (response.status === 403) {
+    const errorBody = await response.text()
+    if (errorBody.includes("oauth1-permissions")) {
+      throw new Error(
+        "Your X app needs Read and Write permissions. Go to developer.x.com > your app > Settings > User authentication settings > Edit > change App permissions to 'Read and write', then regenerate your Access Token and Secret."
+      )
+    }
+    throw new Error(`X API forbidden (403): ${errorBody}`)
+  }
+
   if (!response.ok) {
     const errorBody = await response.text()
     throw new Error(`X API ${method} failed (${response.status}): ${errorBody}`)
