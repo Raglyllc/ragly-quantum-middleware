@@ -122,11 +122,27 @@ export async function xFetch(
 
   const response = await fetch(fullUrl, options)
 
-  // Handle rate limiting with retry
+  // Handle rate limiting with exponential backoff retry
   if (response.status === 429) {
     const retryAfter = response.headers.get("x-rate-limit-reset")
     const resetTime = retryAfter ? Number.parseInt(retryAfter, 10) * 1000 : Date.now() + 60_000
     const waitMs = Math.max(resetTime - Date.now(), 1000)
+
+    // If wait is short enough (under 30s), auto-retry once after waiting
+    if (waitMs <= 30_000 && !skipCache) {
+      await new Promise((resolve) => setTimeout(resolve, waitMs))
+      const retryAuthHeader = await generateOAuthHeader(method, baseUrl, queryParams)
+      headers.Authorization = retryAuthHeader
+      const retryResponse = await fetch(fullUrl, { ...options, headers })
+      if (retryResponse.ok) {
+        const retryData = await retryResponse.json()
+        if (method === "GET") {
+          cache.set(fullUrl, { data: retryData, timestamp: Date.now() })
+        }
+        return retryData
+      }
+    }
+
     const waitMins = Math.ceil(waitMs / 60_000)
     throw new Error(`Rate limited. Try again in ~${waitMins} minute${waitMins > 1 ? "s" : ""}.`)
   }

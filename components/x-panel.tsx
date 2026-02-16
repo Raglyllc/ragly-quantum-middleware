@@ -10,6 +10,11 @@ import {
   ReplyIcon,
   LoadingIcon,
 } from "@/components/icons"
+import { getCachedResponse, setCachedResponse } from "@/lib/api-cache"
+
+const TIMELINE_CACHE_KEY = "x-timeline-panel"
+const MENTIONS_CACHE_KEY = "x-mentions-panel"
+const CLIENT_CACHE_TTL = 3 * 60 * 1000 // 3 minutes
 
 type TabType = "timeline" | "mentions"
 
@@ -49,19 +54,32 @@ export function XPanel({
   const [timelineLoading, setTimelineLoading] = useState(false)
   const [mentionsLoading, setMentionsLoading] = useState(false)
 
-  const fetchTimeline = async () => {
+  const fetchTimeline = async (bypassCache = false) => {
+    // Check client-side cache first
+    if (!bypassCache) {
+      const cached = getCachedResponse<{ tweets: Tweet[]; users: Record<string, UserData> }>(TIMELINE_CACHE_KEY)
+      if (cached) {
+        setTimelineTweets(cached.tweets)
+        setUsers((prev) => ({ ...prev, ...cached.users }))
+        return
+      }
+    }
+
     setTimelineLoading(true)
     setError(null)
     try {
       const res = await fetch("/api/x/timeline")
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to load timeline")
-      setTimelineTweets(data.data || [])
+      const fetchedTweets = data.data || []
+      setTimelineTweets(fetchedTweets)
+      const userMap: Record<string, UserData> = { ...users }
       if (data.includes?.users) {
-        const userMap: Record<string, UserData> = { ...users }
         for (const u of data.includes.users) userMap[u.id] = u
         setUsers(userMap)
       }
+      // Save to client-side cache
+      setCachedResponse(TIMELINE_CACHE_KEY, { tweets: fetchedTweets, users: userMap }, CLIENT_CACHE_TTL)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load timeline")
     } finally {
@@ -69,19 +87,32 @@ export function XPanel({
     }
   }
 
-  const fetchMentions = async () => {
+  const fetchMentions = async (bypassCache = false) => {
+    // Check client-side cache first
+    if (!bypassCache) {
+      const cached = getCachedResponse<{ tweets: Tweet[]; users: Record<string, UserData> }>(MENTIONS_CACHE_KEY)
+      if (cached) {
+        setMentionsTweets(cached.tweets)
+        setUsers((prev) => ({ ...prev, ...cached.users }))
+        return
+      }
+    }
+
     setMentionsLoading(true)
     setError(null)
     try {
       const res = await fetch("/api/x/mentions")
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to load mentions")
-      setMentionsTweets(data.data || [])
+      const fetchedTweets = data.data || []
+      setMentionsTweets(fetchedTweets)
+      const userMap: Record<string, UserData> = { ...users }
       if (data.includes?.users) {
-        const userMap: Record<string, UserData> = { ...users }
         for (const u of data.includes.users) userMap[u.id] = u
         setUsers(userMap)
       }
+      // Save to client-side cache
+      setCachedResponse(MENTIONS_CACHE_KEY, { tweets: fetchedTweets, users: userMap }, CLIENT_CACHE_TTL)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load mentions")
     } finally {
@@ -156,7 +187,7 @@ export function XPanel({
             <div className="flex items-center justify-between p-3 border-b border-border">
               <span className="text-sm font-medium text-foreground">Your Tweets</span>
               <button
-                onClick={fetchTimeline}
+                onClick={() => fetchTimeline(true)}
                 disabled={timelineLoading}
                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 aria-label="Refresh timeline"
@@ -188,7 +219,7 @@ export function XPanel({
             <div className="flex items-center justify-between p-3 border-b border-border">
               <span className="text-sm font-medium text-foreground">Mentions</span>
               <button
-                onClick={fetchMentions}
+                onClick={() => fetchMentions(true)}
                 disabled={mentionsLoading}
                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 aria-label="Refresh mentions"

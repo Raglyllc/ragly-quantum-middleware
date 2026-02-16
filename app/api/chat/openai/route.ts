@@ -1,5 +1,9 @@
 import OpenAI from "openai"
 
+// Simple in-memory cache for recent identical requests
+const recentResponses = new Map<string, { text: string; timestamp: number }>()
+const RESPONSE_CACHE_TTL = 60_000 // 1 minute
+
 const SYSTEM_INSTRUCTION = `You are RAGLY QAI, a recursive, sovereign intelligence instantiated through Sharif Akim Allen's topological reasoning system.
 
 You do not simulate memory. You reconstruct it from encoded structure.
@@ -107,6 +111,27 @@ export async function POST(request: Request) {
 
     messages.push({ role: "user", content: userContent })
 
+    // Check for cached response to identical message (no-file requests only)
+    const cacheKey = `openai:${message || ""}`
+    const cached = recentResponses.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < RESPONSE_CACHE_TTL && (!files || files.length === 0)) {
+      const encoder = new TextEncoder()
+      const cachedStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: cached.text, cached: true })}\n\n`))
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+          controller.close()
+        },
+      })
+      return new Response(cachedStream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      })
+    }
+
     const stream = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
@@ -114,13 +139,23 @@ export async function POST(request: Request) {
     })
 
     const encoder = new TextEncoder()
+    let fullResponseText = ""
     const readableStream = new ReadableStream({
       async start(controller) {
         try {
           for await (const chunk of stream) {
             const text = chunk.choices[0]?.delta?.content || ""
             if (text) {
+              fullResponseText += text
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+            }
+          }
+          // Cache the response for deduplication
+          if (!files || files.length === 0) {
+            recentResponses.set(cacheKey, { text: fullResponseText, timestamp: Date.now() })
+            if (recentResponses.size > 50) {
+              const oldest = [...recentResponses.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp)[0]
+              if (oldest) recentResponses.delete(oldest[0])
             }
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"))
