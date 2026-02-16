@@ -192,9 +192,7 @@ export function XPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
     setError(null)
     setSuccess(null)
     if (tab === "queue") fetchQueue()
-    // Only auto-fetch if we haven't fetched before - manual refresh is always available
-    if (tab === "timeline" && timelineTweets.length === 0 && !timelineLoading) fetchTimeline()
-    if (tab === "mentions" && mentionsTweets.length === 0 && !mentionsLoading) fetchMentions()
+    // Timeline and mentions require manual refresh to avoid rate limits
   }
 
   const formatDate = (dateStr?: string) => {
@@ -434,7 +432,7 @@ export function XPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
               </div>
             ) : timelineTweets.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">
-                No tweets found.
+                Click the refresh button above to load your tweets.
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -466,7 +464,7 @@ export function XPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
               </div>
             ) : mentionsTweets.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">
-                No mentions yet.
+                Click the refresh button above to load mentions.
               </div>
             ) : (
               <div className="divide-y divide-border">

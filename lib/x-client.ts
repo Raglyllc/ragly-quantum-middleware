@@ -69,7 +69,7 @@ async function generateOAuthHeader(
 
 // Simple in-memory cache for GET requests to avoid rate limits
 const cache = new Map<string, { data: unknown; timestamp: number }>()
-const CACHE_TTL = 120_000 // 2 minutes
+const CACHE_TTL = 900_000 // 15 minutes
 
 // Cache the user ID so we don't call /users/me on every request
 let cachedUserId: string | null = null
