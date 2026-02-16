@@ -38,11 +38,6 @@ async function generateOAuthHeader(
   const accessToken = (process.env.X_API_ACCESS_TOKEN || "").trim()
   const accessTokenSecret = (process.env.X_API_ACCESS_TOKEN_SECRET || "").trim()
 
-  console.log("[v0] OAuth creds - consumerKey:", consumerKey.length, "chars, starts:", consumerKey.substring(0, 8))
-  console.log("[v0] OAuth creds - consumerSecret:", consumerSecret.length, "chars")
-  console.log("[v0] OAuth creds - accessToken:", accessToken.length, "chars, starts:", accessToken.substring(0, 12))
-  console.log("[v0] OAuth creds - accessTokenSecret:", accessTokenSecret.length, "chars")
-
   const oauthParams: Record<string, string> = {
     oauth_consumer_key: consumerKey,
     oauth_nonce: generateNonce(),
@@ -52,7 +47,6 @@ async function generateOAuthHeader(
     oauth_version: "1.0",
   }
 
-  // Combine oauth params and query params for signature base
   const allParams: Record<string, string> = { ...oauthParams, ...queryParams }
   const sortedParamString = Object.keys(allParams)
     .sort()
@@ -62,11 +56,7 @@ async function generateOAuthHeader(
   const signatureBase = `${method.toUpperCase()}&${percentEncode(url)}&${percentEncode(sortedParamString)}`
   const signingKey = `${percentEncode(consumerSecret)}&${percentEncode(accessTokenSecret)}`
 
-  console.log("[v0] OAuth signatureBase:", signatureBase)
-  console.log("[v0] OAuth signingKey length:", signingKey.length)
-
   const signature = await hmacSha1Base64(signingKey, signatureBase)
-  console.log("[v0] OAuth signature:", signature)
   oauthParams.oauth_signature = signature
 
   const headerString = Object.keys(oauthParams)
@@ -78,7 +68,6 @@ async function generateOAuthHeader(
 }
 
 export async function xFetch(fullUrl: string, method: "GET" | "POST" = "GET", body?: Record<string, unknown>) {
-  // Split URL and query params for signature
   const urlObj = new URL(fullUrl)
   const baseUrl = `${urlObj.origin}${urlObj.pathname}`
   const queryParams: Record<string, string> = {}
@@ -99,16 +88,12 @@ export async function xFetch(fullUrl: string, method: "GET" | "POST" = "GET", bo
     options.body = JSON.stringify(body)
   }
 
-  console.log("[v0] xFetch:", method, fullUrl)
   const response = await fetch(fullUrl, options)
 
   if (!response.ok) {
     const errorBody = await response.text()
-    console.log("[v0] xFetch error response:", response.status, errorBody)
     throw new Error(`X API ${method} failed (${response.status}): ${errorBody}`)
   }
 
-  const data = await response.json()
-  console.log("[v0] xFetch success:", method, fullUrl)
-  return data
+  return response.json()
 }
