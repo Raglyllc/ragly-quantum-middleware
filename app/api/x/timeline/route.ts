@@ -18,7 +18,6 @@ export async function GET() {
     return Response.json({
       data: timeline.data || [],
       includes: timeline.includes || {},
-      username: meData.data.username,
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch timeline"

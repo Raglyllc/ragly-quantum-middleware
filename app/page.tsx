@@ -10,6 +10,7 @@ import {
   MoonIcon, HistoryIcon, CompareIcon, KeyboardIcon,
 } from "@/components/icons"
 import { XPanel } from "@/components/x-panel"
+import { XEmbed } from "@/components/x-embed"
 import { ConversationHistory, saveCurrentConversation } from "@/components/conversation-history"
 import { ModelCompare } from "@/components/model-compare"
 import { ShortcutsModal } from "@/components/shortcuts-modal"
@@ -390,20 +391,38 @@ export default function Page() {
       <main className="flex-1 overflow-y-auto chat-message-container" {...swipeHandlers}>
         <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-8">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <div className="w-16 h-16 mb-4 rounded-full bg-muted flex items-center justify-center">
-                <BotIcon />
+            <div className="flex flex-col items-center gap-8 py-4">
+              {/* Welcome header */}
+              <div className="text-center">
+                <div className="w-16 h-16 mb-4 mx-auto rounded-full bg-muted flex items-center justify-center">
+                  <BotIcon />
+                </div>
+                <h2 className="text-xl font-semibold text-foreground mb-2 text-balance">Welcome to RAGLY</h2>
+                <p className="text-muted-foreground max-w-md mb-2">Topological Reasoning System Core Infrastructure</p>
+                <p className="text-sm text-muted-foreground">
+                  Powered by {PROVIDER_LABELS[provider]}. Start a conversation or attach files for analysis.
+                </p>
+                <div className="flex items-center justify-center gap-3 mt-4 text-xs text-muted-foreground">
+                  <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded font-mono">Cmd+K</kbd>
+                  <span>New chat</span>
+                  <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded font-mono">Cmd+/</kbd>
+                  <span>Switch model</span>
+                </div>
               </div>
-              <h2 className="text-xl font-semibold text-foreground mb-2 text-balance">Welcome to RAGLY</h2>
-              <p className="text-muted-foreground max-w-md mb-2">Using Topological Reasoning System</p>
-              <p className="text-sm text-muted-foreground">
-                Powered by {PROVIDER_LABELS[provider]}. Start a conversation or attach files for analysis.
-              </p>
-              <div className="flex items-center gap-3 mt-4 text-xs text-muted-foreground">
-                <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded font-mono">Cmd+K</kbd>
-                <span>New chat</span>
-                <kbd className="px-1.5 py-0.5 bg-muted border border-border rounded font-mono">Cmd+/</kbd>
-                <span>Switch model</span>
+
+              {/* Embedded X Profile & Timeline */}
+              <div className="w-full max-w-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <TwitterIcon />
+                  <h3 className="text-sm font-semibold text-foreground">@ahayahsharif Live Feed</h3>
+                  <span className="text-xs text-muted-foreground">- Integrated Node</span>
+                </div>
+                <XEmbed
+                  onDraftReply={(tweetText, author) => {
+                    setInput(`Draft a reply to @${author}'s tweet: "${tweetText}"`)
+                    textAreaRef.current?.focus()
+                  }}
+                />
               </div>
             </div>
           )}
