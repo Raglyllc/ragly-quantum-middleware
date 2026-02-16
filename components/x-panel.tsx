@@ -112,7 +112,7 @@ export function XPanel({
                 )}
               </div>
               <button
-                onClick={timeline.refresh}
+                onClick={timeline.forceRefresh}
                 disabled={timeline.loading}
                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 aria-label="Refresh timeline"
@@ -155,7 +155,7 @@ export function XPanel({
                 )}
               </div>
               <button
-                onClick={mentions.refresh}
+                onClick={mentions.forceRefresh}
                 disabled={mentions.loading}
                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 aria-label="Refresh mentions"

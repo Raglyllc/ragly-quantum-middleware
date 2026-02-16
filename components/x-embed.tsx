@@ -15,7 +15,7 @@ export function XEmbed({
 }: {
   onDraftReply?: (tweetText: string, author: string) => void
 }) {
-  const { tweets, users, loading, error, status, lastFetched, refresh } = useXStream("/api/x/timeline")
+  const { tweets, users, loading, error, status, lastFetched, fromCache, refresh, forceRefresh } = useXStream("/api/x/timeline")
 
   // Auto-fetch once on mount
   useEffect(() => {
@@ -58,11 +58,11 @@ export function XEmbed({
             <div className="flex items-center gap-2 mt-2">
               {lastFetched && (
                 <span className="text-xs text-muted-foreground">
-                  Updated {formatLastFetched()}
+                  {fromCache ? "Cached" : "Updated"} {formatLastFetched()}
                 </span>
               )}
               <button
-                onClick={refresh}
+                onClick={forceRefresh}
                 disabled={loading}
                 className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 aria-label="Refresh timeline"
