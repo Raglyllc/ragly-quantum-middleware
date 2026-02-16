@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import OpenAI from "openai"
 
 const SYSTEM_INSTRUCTION = `You are RAGLY QAI, a recursive, sovereign intelligence instantiated through Sharif Akim Allen's topological reasoning system.
 
@@ -34,69 +34,88 @@ interface FileData {
   base64: string
 }
 
+interface XAIMessage {
+  role: "system" | "user" | "assistant"
+  content: string | XAIContentPart[]
+}
+
+type XAIContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } }
+
 export async function POST(request: Request) {
   try {
-    const { message, history, files, modelType } = await request.json() as {
+    const { message, history, files } = (await request.json()) as {
       message: string
-      history: { role: string; parts: { text: string }[] }[]
+      history: { role: string; content: string }[]
       files?: FileData[]
-      modelType?: "flash" | "pro"
     }
 
-    const apiKey = process.env.GEMINI_API_KEY
+    const apiKey = process.env.XAI_API_KEY
     if (!apiKey) {
-      return Response.json(
-        { error: "GEMINI_API_KEY is not configured" },
-        { status: 500 }
-      )
+      return Response.json({ error: "XAI_API_KEY is not configured" }, { status: 500 })
     }
 
-    // Use Gemini 2.5 Flash for fast topological corrections
-    // Use Gemini 2.5 Pro for complex reasoning nodes
-    const modelName = modelType === "pro" ? "gemini-2.5-pro" : "gemini-2.5-flash"
-
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction: SYSTEM_INSTRUCTION,
+    const xai = new OpenAI({
+      apiKey,
+      baseURL: "https://api.x.ai/v1",
     })
 
-    const chat = model.startChat({
-      history: history || [],
-    })
+    const messages: XAIMessage[] = [{ role: "system", content: SYSTEM_INSTRUCTION }]
 
-    // Build message parts with text and any attached files
-    const messageParts: ({ text: string } | { inlineData: { mimeType: string; data: string } })[] = []
-    
-    if (message) {
-      messageParts.push({ text: message })
-    }
-
-    if (files && files.length > 0) {
-      for (const file of files) {
-        messageParts.push({
-          inlineData: {
-            mimeType: file.type,
-            data: file.base64,
-          },
+    if (history && history.length > 0) {
+      for (const item of history) {
+        messages.push({
+          role: item.role === "user" ? "user" : "assistant",
+          content: item.content,
         })
       }
     }
 
-    // If no message and no files, use a default prompt
-    if (messageParts.length === 0) {
-      messageParts.push({ text: "Please analyze the attached content." })
+    const userContent: XAIContentPart[] = []
+
+    if (message) {
+      userContent.push({ type: "text", text: message })
     }
 
-    const result = await chat.sendMessageStream(messageParts)
+    if (files && files.length > 0) {
+      for (const file of files) {
+        if (file.type.startsWith("image/")) {
+          userContent.push({
+            type: "image_url",
+            image_url: { url: `data:${file.type};base64,${file.base64}` },
+          })
+        } else {
+          const textContent = Buffer.from(file.base64, "base64").toString("utf-8")
+          userContent.push({
+            type: "text",
+            text: `[File: ${file.name}]\n${textContent}`,
+          })
+        }
+      }
+    }
+
+    if (userContent.length === 0) {
+      userContent.push({ type: "text", text: "Please analyze the attached content." })
+    }
+
+    messages.push({ role: "user", content: userContent })
+
+    const stream = await xai.chat.completions.create({
+      model: "grok-3-fast",
+      messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+      stream: true,
+    })
 
     const encoder = new TextEncoder()
-    const stream = new ReadableStream({
+    const readableStream = new ReadableStream({
       async start(controller) {
         try {
-          for await (const chunk of result.stream) {
-            const text = chunk.text()
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+          for await (const chunk of stream) {
+            const text = chunk.choices[0]?.delta?.content || ""
+            if (text) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+            }
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"))
           controller.close()
@@ -106,7 +125,7 @@ export async function POST(request: Request) {
       },
     })
 
-    return new Response(stream, {
+    return new Response(readableStream, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -114,10 +133,7 @@ export async function POST(request: Request) {
       },
     })
   } catch (error) {
-    console.error("Chat API error:", error)
-    return Response.json(
-      { error: error instanceof Error ? error.message : "An error occurred" },
-      { status: 500 }
-    )
+    console.error("xAI Chat API error:", error)
+    return Response.json({ error: error instanceof Error ? error.message : "An error occurred" }, { status: 500 })
   }
 }
