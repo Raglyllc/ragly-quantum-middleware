@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
     // Step 1: Get authenticated user ID using OAuth 1.0a
     const meUrl = "https://api.twitter.com/2/users/me"
-    const meAuthHeader = generateOAuthHeader({
+    const meAuthHeader = await generateOAuthHeader({
       method: "GET",
       url: meUrl,
     })
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       "user.fields": "name,username,profile_image_url",
     }
 
-    const mentionsAuthHeader = generateOAuthHeader({
+    const mentionsAuthHeader = await generateOAuthHeader({
       method: "GET",
       url: mentionsUrl,
       params: queryParams,

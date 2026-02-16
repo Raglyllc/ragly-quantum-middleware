@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       bodyObj.reply = { in_reply_to_tweet_id: reply_to }
     }
 
-    const authHeader = generateOAuthHeader({
+    const authHeader = await generateOAuthHeader({
       method: "POST",
       url,
     })
