@@ -67,7 +67,39 @@ async function generateOAuthHeader(
   return `OAuth ${headerString}`
 }
 
-export async function xFetch(fullUrl: string, method: "GET" | "POST" = "GET", body?: Record<string, unknown>) {
+// Simple in-memory cache for GET requests to avoid rate limits
+const cache = new Map<string, { data: unknown; timestamp: number }>()
+const CACHE_TTL = 120_000 // 2 minutes
+
+// Cache the user ID so we don't call /users/me on every request
+let cachedUserId: string | null = null
+let cachedUserIdTimestamp = 0
+const USER_ID_TTL = 600_000 // 10 minutes
+
+export async function getCachedUserId(): Promise<string> {
+  if (cachedUserId && Date.now() - cachedUserIdTimestamp < USER_ID_TTL) {
+    return cachedUserId
+  }
+  const data = await xFetch("https://api.twitter.com/2/users/me", "GET", undefined, true)
+  cachedUserId = data.data.id
+  cachedUserIdTimestamp = Date.now()
+  return cachedUserId!
+}
+
+export async function xFetch(
+  fullUrl: string,
+  method: "GET" | "POST" = "GET",
+  body?: Record<string, unknown>,
+  skipCache = false
+) {
+  // Return cached data for GET requests if available
+  if (method === "GET" && !skipCache) {
+    const cached = cache.get(fullUrl)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data
+    }
+  }
+
   const urlObj = new URL(fullUrl)
   const baseUrl = `${urlObj.origin}${urlObj.pathname}`
   const queryParams: Record<string, string> = {}
@@ -90,10 +122,26 @@ export async function xFetch(fullUrl: string, method: "GET" | "POST" = "GET", bo
 
   const response = await fetch(fullUrl, options)
 
+  // Handle rate limiting with retry
+  if (response.status === 429) {
+    const retryAfter = response.headers.get("x-rate-limit-reset")
+    const resetTime = retryAfter ? Number.parseInt(retryAfter, 10) * 1000 : Date.now() + 60_000
+    const waitMs = Math.max(resetTime - Date.now(), 1000)
+    const waitMins = Math.ceil(waitMs / 60_000)
+    throw new Error(`Rate limited. Try again in ~${waitMins} minute${waitMins > 1 ? "s" : ""}.`)
+  }
+
   if (!response.ok) {
     const errorBody = await response.text()
     throw new Error(`X API ${method} failed (${response.status}): ${errorBody}`)
   }
 
-  return response.json()
+  const data = await response.json()
+
+  // Cache successful GET responses
+  if (method === "GET") {
+    cache.set(fullUrl, { data, timestamp: Date.now() })
+  }
+
+  return data
 }

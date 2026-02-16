@@ -190,9 +190,11 @@ export function XPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab)
     setError(null)
+    setSuccess(null)
     if (tab === "queue") fetchQueue()
-    if (tab === "timeline" && timelineTweets.length === 0) fetchTimeline()
-    if (tab === "mentions" && mentionsTweets.length === 0) fetchMentions()
+    // Only auto-fetch if we haven't fetched before - manual refresh is always available
+    if (tab === "timeline" && timelineTweets.length === 0 && !timelineLoading) fetchTimeline()
+    if (tab === "mentions" && mentionsTweets.length === 0 && !mentionsLoading) fetchMentions()
   }
 
   const formatDate = (dateStr?: string) => {

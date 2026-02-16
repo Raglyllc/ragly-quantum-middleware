@@ -1,9 +1,8 @@
-import { xFetch } from "@/lib/x-client"
+import { xFetch, getCachedUserId } from "@/lib/x-client"
 
 export async function GET() {
   try {
-    const meData = await xFetch("https://api.twitter.com/2/users/me")
-    const userId = meData.data.id
+    const userId = await getCachedUserId()
 
     const params = new URLSearchParams({
       max_results: "10",
