@@ -27,7 +27,7 @@ interface UploadedFile {
   preview?: string
 }
 
-type AIProvider = "gemini" | "openai"
+type AIProvider = "gemini" | "openai" | "xai"
 
 export default function Page() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -143,8 +143,9 @@ export default function Page() {
         base64: f.base64,
       }))
 
-      const apiEndpoint = provider === "openai" ? "/api/chat/openai" : "/api/chat"
-      const historyToSend = provider === "openai" ? openaiHistory : geminiHistory
+      const apiEndpoint =
+        provider === "openai" ? "/api/chat/openai" : provider === "xai" ? "/api/chat/xai" : "/api/chat"
+      const historyToSend = provider === "gemini" ? geminiHistory : openaiHistory
 
       const response = await fetch(apiEndpoint, {
         method: "POST",
@@ -191,7 +192,7 @@ export default function Page() {
       setMessages((prev) => prev.map((msg) => (msg.id === modelMessageId ? { ...msg, isStreaming: false } : msg)))
 
       // Update history based on provider
-      if (provider === "openai") {
+      if (provider === "openai" || provider === "xai") {
         setOpenaiHistory((prev) => [
           ...prev,
           { role: "user", content: currentInput },
@@ -243,6 +244,7 @@ export default function Page() {
             >
               <option value="gemini">Gemini</option>
               <option value="openai">OpenAI</option>
+              <option value="xai">Grok</option>
             </select>
             <button
               type="button"
@@ -268,7 +270,7 @@ export default function Page() {
                 Using Topological Reasoning System
               </p>
               <p className="text-sm text-muted-foreground">
-                Powered by {provider === "openai" ? "GPT-4o" : "Gemini 2.5 Flash"}. Start a conversation or attach files for analysis.
+                Powered by {provider === "openai" ? "GPT-4o" : provider === "xai" ? "Grok 3 Fast" : "Gemini 2.5 Flash"}. Start a conversation or attach files for analysis.
               </p>
             </div>
           )}
