@@ -384,7 +384,7 @@ export default function Page() {
                   <BotIcon />
                 </div>
                 <h2 className="text-xl font-semibold text-foreground mb-2 text-balance">Welcome to RAGLY</h2>
-                <p className="text-muted-foreground max-w-md mb-2">Topological Reasoning System Core Infrastructure</p>
+                <p className="text-muted-foreground max-w-md mb-2">Topological Reasoning System</p>
                 <p className="text-sm text-muted-foreground">
                   Powered by {PROVIDER_LABELS[provider]}. Start a conversation or attach files for analysis.
                 </p>
