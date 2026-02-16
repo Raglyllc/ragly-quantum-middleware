@@ -1,35 +1,37 @@
-import { getXClient } from "@/lib/x-client"
+import { xFetch } from "@/lib/x-client"
 
 export async function GET() {
   try {
-    const client = getXClient()
+    const meData = await xFetch("https://api.twitter.com/2/users/me")
+    const userId = meData.data.id
 
-    // First try to get user info - if this fails with 401/403, we're on Free tier
-    const me = await client.v2.me()
-    const userId = me.data.id
-
-    const timeline = await client.v2.userTimeline(userId, {
-      max_results: 10,
-      "tweet.fields": ["created_at", "public_metrics", "text"],
-      expansions: ["author_id"],
-      "user.fields": ["name", "username", "profile_image_url"],
+    const params = new URLSearchParams({
+      max_results: "10",
+      "tweet.fields": "created_at,public_metrics,text",
+      expansions: "author_id",
+      "user.fields": "name,username,profile_image_url",
     })
+
+    const timeline = await xFetch(
+      `https://api.twitter.com/2/users/${userId}/tweets?${params.toString()}`
+    )
 
     return Response.json({
-      data: timeline.data?.data || [],
-      includes: timeline.data?.includes || {},
-      username: me.data.username,
+      data: timeline.data || [],
+      includes: timeline.includes || {},
+      username: meData.data.username,
     })
   } catch (error: unknown) {
-    // Check if this is a 401/403 - means Free tier doesn't support this endpoint
-    const code = error && typeof error === "object" && "code" in error ? (error as { code: number }).code : 0
-    if (code === 401 || code === 403) {
-      return Response.json({
-        error: "free_tier",
-        message: "Timeline access requires X API Basic plan or higher. Posting tweets is available on the Free tier.",
-      }, { status: 403 })
-    }
     const message = error instanceof Error ? error.message : "Failed to fetch timeline"
+    console.error("X Timeline error:", message)
+
+    if (message.includes("401") || message.includes("403")) {
+      return Response.json({
+        error: "auth_error",
+        message: "Authentication failed. Please verify your X API credentials.",
+      }, { status: 401 })
+    }
+
     return Response.json({ error: message }, { status: 500 })
   }
 }

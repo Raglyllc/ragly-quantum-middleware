@@ -1,4 +1,4 @@
-import { getXClient } from "@/lib/x-client"
+import { xFetch } from "@/lib/x-client"
 
 export async function POST(request: Request) {
   try {
@@ -15,14 +15,12 @@ export async function POST(request: Request) {
       return Response.json({ error: "Tweet exceeds 280 characters" }, { status: 400 })
     }
 
-    const client = getXClient()
-
-    const tweetPayload: Record<string, unknown> = { text: text.trim() }
+    const body: Record<string, unknown> = { text: text.trim() }
     if (reply_to) {
-      tweetPayload.reply = { in_reply_to_tweet_id: reply_to }
+      body.reply = { in_reply_to_tweet_id: reply_to }
     }
 
-    const result = await client.v2.tweet(tweetPayload as any)
+    const result = await xFetch("https://api.twitter.com/2/tweets", "POST", body)
 
     return Response.json({
       data: {
