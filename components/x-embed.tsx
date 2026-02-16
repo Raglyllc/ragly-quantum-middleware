@@ -8,6 +8,10 @@ import {
   RetweetIcon,
   ReplyIcon,
 } from "@/components/icons"
+import { getCachedResponse, setCachedResponse } from "@/lib/api-cache"
+
+const TIMELINE_CACHE_KEY = "x-timeline"
+const TIMELINE_CLIENT_TTL = 3 * 60 * 1000 // 3 minutes client-side cache
 
 interface Tweet {
   id: string
@@ -39,20 +43,35 @@ export function XEmbed({
   const [error, setError] = useState<string | null>(null)
   const [lastFetched, setLastFetched] = useState<Date | null>(null)
 
-  const fetchTimeline = useCallback(async () => {
+  const fetchTimeline = useCallback(async (bypassCache = false) => {
+    // Check client-side cache first
+    if (!bypassCache) {
+      const cached = getCachedResponse<{ tweets: Tweet[]; users: Record<string, UserData> }>(TIMELINE_CACHE_KEY)
+      if (cached) {
+        setTweets(cached.tweets)
+        setUsers(cached.users)
+        setLastFetched(new Date())
+        return
+      }
+    }
+
     setLoading(true)
     setError(null)
     try {
       const res = await fetch("/api/x/timeline")
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Failed to load timeline")
-      setTweets(data.data || [])
+      const fetchedTweets = data.data || []
+      setTweets(fetchedTweets)
+      const userMap: Record<string, UserData> = {}
       if (data.includes?.users) {
-        const userMap: Record<string, UserData> = {}
         for (const u of data.includes.users) userMap[u.id] = u
-        setUsers(userMap)
       }
+      setUsers(userMap)
       setLastFetched(new Date())
+
+      // Save to client-side cache
+      setCachedResponse(TIMELINE_CACHE_KEY, { tweets: fetchedTweets, users: userMap }, TIMELINE_CLIENT_TTL)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load timeline")
     } finally {
@@ -105,7 +124,7 @@ export function XEmbed({
                 </span>
               )}
               <button
-                onClick={fetchTimeline}
+                onClick={() => fetchTimeline(true)}
                 disabled={loading}
                 className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 aria-label="Refresh timeline"
