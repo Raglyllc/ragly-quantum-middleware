@@ -67,14 +67,77 @@ async function generateOAuthHeader(
   return `OAuth ${headerString}`
 }
 
-// Simple in-memory cache for GET requests to avoid rate limits
+// ─── Per-endpoint rate limit tracking ───
+// Tracks remaining calls and reset times per X API endpoint path
+interface RateLimitInfo {
+  remaining: number
+  limit: number
+  resetAt: number // epoch ms
+}
+
+const rateLimits = new Map<string, RateLimitInfo>()
+
+function getEndpointKey(url: string): string {
+  // Normalize: /2/users/me, /2/users/:id/tweets, /2/users/:id/mentions, /2/tweets
+  try {
+    const path = new URL(url).pathname
+    return path.replace(/\/\d{5,}/, "/:id")
+  } catch {
+    return url
+  }
+}
+
+function updateRateLimits(url: string, headers: Headers) {
+  const key = getEndpointKey(url)
+  const remaining = headers.get("x-rate-limit-remaining")
+  const limit = headers.get("x-rate-limit-limit")
+  const reset = headers.get("x-rate-limit-reset")
+
+  if (remaining !== null && reset !== null) {
+    rateLimits.set(key, {
+      remaining: Number.parseInt(remaining, 10),
+      limit: limit ? Number.parseInt(limit, 10) : 0,
+      resetAt: Number.parseInt(reset, 10) * 1000,
+    })
+    console.log(`[v0] Rate limit [${key}]: ${remaining}/${limit || "?"} remaining, resets ${new Date(Number.parseInt(reset, 10) * 1000).toLocaleTimeString()}`)
+  }
+}
+
+function isRateLimited(url: string): { limited: boolean; waitMs: number } {
+  const key = getEndpointKey(url)
+  const info = rateLimits.get(key)
+  if (!info) return { limited: false, waitMs: 0 }
+  if (info.remaining <= 0 && Date.now() < info.resetAt) {
+    return { limited: true, waitMs: info.resetAt - Date.now() }
+  }
+  // Clear stale entries
+  if (Date.now() >= info.resetAt) {
+    rateLimits.delete(key)
+  }
+  return { limited: false, waitMs: 0 }
+}
+
+// ─── Response cache ───
 const cache = new Map<string, { data: unknown; timestamp: number }>()
 const CACHE_TTL = 900_000 // 15 minutes
 
-// Cache the user ID so we don't call /users/me on every request
+// ─── Request queue to prevent parallel bursts ───
+let lastRequestTime = 0
+const MIN_REQUEST_GAP = 1100 // 1.1 seconds between requests to X API
+
+async function throttle() {
+  const now = Date.now()
+  const gap = now - lastRequestTime
+  if (gap < MIN_REQUEST_GAP) {
+    await new Promise((r) => setTimeout(r, MIN_REQUEST_GAP - gap))
+  }
+  lastRequestTime = Date.now()
+}
+
+// ─── User ID cache ───
 let cachedUserId: string | null = null
 let cachedUserIdTimestamp = 0
-const USER_ID_TTL = 600_000 // 10 minutes
+const USER_ID_TTL = 3_600_000 // 1 hour
 
 export async function getCachedUserId(): Promise<string> {
   if (cachedUserId && Date.now() - cachedUserIdTimestamp < USER_ID_TTL) {
@@ -86,19 +149,40 @@ export async function getCachedUserId(): Promise<string> {
   return cachedUserId!
 }
 
+// ─── Get diagnostics for debugging ───
+export function getRateLimitDiagnostics(): Record<string, RateLimitInfo & { waitSec: number }> {
+  const result: Record<string, RateLimitInfo & { waitSec: number }> = {}
+  for (const [key, info] of rateLimits.entries()) {
+    result[key] = { ...info, waitSec: Math.max(0, Math.ceil((info.resetAt - Date.now()) / 1000)) }
+  }
+  return result
+}
+
 export async function xFetch(
   fullUrl: string,
   method: "GET" | "POST" = "GET",
   body?: Record<string, unknown>,
   skipCache = false
 ) {
-  // Return cached data for GET requests if available
+  // 1. Return cached data for GET requests if available
   if (method === "GET" && !skipCache) {
     const cached = cache.get(fullUrl)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log(`[v0] Cache HIT: ${getEndpointKey(fullUrl)}`)
       return cached.data
     }
   }
+
+  // 2. Check if this endpoint is rate-limited before making the call
+  const { limited, waitMs } = isRateLimited(fullUrl)
+  if (limited) {
+    const waitMins = Math.ceil(waitMs / 60_000)
+    console.log(`[v0] BLOCKED by rate limit: ${getEndpointKey(fullUrl)}, wait ${waitMins}min`)
+    throw new Error(`Rate limited on ${getEndpointKey(fullUrl)}. Try again in ~${waitMins} minute${waitMins > 1 ? "s" : ""}.`)
+  }
+
+  // 3. Throttle to prevent burst requests
+  await throttle()
 
   const urlObj = new URL(fullUrl)
   const baseUrl = `${urlObj.origin}${urlObj.pathname}`
@@ -120,14 +204,27 @@ export async function xFetch(
     options.body = JSON.stringify(body)
   }
 
+  console.log(`[v0] xFetch: ${method} ${getEndpointKey(fullUrl)}`)
   const response = await fetch(fullUrl, options)
 
-  // Handle rate limiting with retry
+  // ALWAYS log rate limit headers from every response
+  updateRateLimits(fullUrl, response.headers)
+
+  // Handle rate limiting
   if (response.status === 429) {
-    const retryAfter = response.headers.get("x-rate-limit-reset")
-    const resetTime = retryAfter ? Number.parseInt(retryAfter, 10) * 1000 : Date.now() + 60_000
-    const waitMs = Math.max(resetTime - Date.now(), 1000)
-    const waitMins = Math.ceil(waitMs / 60_000)
+    const resetHeader = response.headers.get("x-rate-limit-reset")
+    const resetAt = resetHeader ? Number.parseInt(resetHeader, 10) * 1000 : Date.now() + 60_000
+    const waitMsCalc = Math.max(resetAt - Date.now(), 1000)
+    const waitMins = Math.ceil(waitMsCalc / 60_000)
+
+    // Record the rate limit so we don't retry immediately
+    rateLimits.set(getEndpointKey(fullUrl), {
+      remaining: 0,
+      limit: 0,
+      resetAt,
+    })
+
+    console.log(`[v0] 429 on ${getEndpointKey(fullUrl)}: reset in ${waitMins}min at ${new Date(resetAt).toLocaleTimeString()}`)
     throw new Error(`Rate limited. Try again in ~${waitMins} minute${waitMins > 1 ? "s" : ""}.`)
   }
 

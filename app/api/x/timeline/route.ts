@@ -1,6 +1,5 @@
-import { xFetch, getCachedUserId } from "@/lib/x-client"
+import { xFetch, getCachedUserId, getRateLimitDiagnostics } from "@/lib/x-client"
 
-// Server-Sent Events streaming to avoid connection timeouts on rate limits
 export async function GET() {
   const encoder = new TextEncoder()
 
@@ -11,7 +10,6 @@ export async function GET() {
       }
 
       try {
-        // Send a heartbeat immediately so the client knows we're connected
         send("status", { state: "connecting" })
 
         const userId = await getCachedUserId()
@@ -33,11 +31,11 @@ export async function GET() {
           includes: timeline.includes || {},
         })
 
-        send("done", { success: true })
+        send("done", { success: true, rateLimits: getRateLimitDiagnostics() })
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Failed to fetch timeline"
-        console.error("X Timeline stream error:", message)
-        send("error", { message })
+        console.error("[v0] X Timeline stream error:", message)
+        send("error", { message, rateLimits: getRateLimitDiagnostics() })
       } finally {
         controller.close()
       }

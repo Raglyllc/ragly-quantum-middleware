@@ -39,6 +39,10 @@ interface StreamState {
 
 const CLIENT_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
+// ─── Global in-flight deduplication ───
+// Prevents multiple hook instances from fetching the same endpoint simultaneously
+const inflightRequests = new Map<string, Promise<void>>()
+
 function getCacheKey(endpoint: string) {
   return `x-stream-cache:${endpoint}`
 }
@@ -101,12 +105,37 @@ export function useXStream(endpoint: string) {
       if (cached && state.tweets.length > 0) return
     }
 
-    // Abort any in-flight request
+    // If another hook instance is already fetching this endpoint, wait for it
+    // then read from cache instead of making a duplicate request
+    const inflight = inflightRequests.get(endpoint)
+    if (inflight && !force) {
+      await inflight
+      const cached = readCache(endpoint)
+      if (cached) {
+        setState({
+          tweets: cached.tweets,
+          users: cached.users,
+          loading: false,
+          status: "",
+          error: null,
+          lastFetched: new Date(cached.timestamp),
+          fromCache: true,
+        })
+        return
+      }
+    }
+
+    // Abort any in-flight request from THIS hook instance
     if (abortRef.current) abortRef.current.abort()
     const controller = new AbortController()
     abortRef.current = controller
 
     setState((prev) => ({ ...prev, loading: true, error: null, status: "Connecting...", fromCache: false }))
+
+    // Register this fetch globally so other instances can wait
+    let resolveInflight: () => void
+    const promise = new Promise<void>((r) => { resolveInflight = r })
+    inflightRequests.set(endpoint, promise)
 
     try {
       const res = await globalThis.fetch(endpoint, { signal: controller.signal })
@@ -188,6 +217,8 @@ export function useXStream(endpoint: string) {
       }))
     } finally {
       setState((prev) => ({ ...prev, loading: false }))
+      resolveInflight!()
+      inflightRequests.delete(endpoint)
     }
   }, [endpoint, state.tweets.length])
 
