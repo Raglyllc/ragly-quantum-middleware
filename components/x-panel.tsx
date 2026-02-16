@@ -7,6 +7,8 @@ import {
   RefreshIcon,
   HeartIcon,
   RetweetIcon,
+  ReplyIcon,
+  LoadingIcon,
 } from "@/components/icons"
 
 type TabType = "timeline" | "mentions"
@@ -30,7 +32,15 @@ interface UserData {
   profile_image_url?: string
 }
 
-export function XPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+export function XPanel({
+  isOpen,
+  onClose,
+  onDraftReply,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onDraftReply?: (tweetText: string, author: string) => void
+}) {
   const [activeTab, setActiveTab] = useState<TabType>("timeline")
   const [error, setError] = useState<string | null>(null)
   const [timelineTweets, setTimelineTweets] = useState<Tweet[]>([])
@@ -165,7 +175,7 @@ export function XPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
             ) : (
               <div className="divide-y divide-border">
                 {timelineTweets.map((tweet) => (
-                  <TweetCard key={tweet.id} tweet={tweet} users={users} formatDate={formatDate} />
+                  <TweetCard key={tweet.id} tweet={tweet} users={users} formatDate={formatDate} onDraftReply={onDraftReply} />
                 ))}
               </div>
             )}
@@ -197,7 +207,7 @@ export function XPanel({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
             ) : (
               <div className="divide-y divide-border">
                 {mentionsTweets.map((tweet) => (
-                  <TweetCard key={tweet.id} tweet={tweet} users={users} formatDate={formatDate} />
+                  <TweetCard key={tweet.id} tweet={tweet} users={users} formatDate={formatDate} onDraftReply={onDraftReply} />
                 ))}
               </div>
             )}
@@ -212,15 +222,18 @@ function TweetCard({
   tweet,
   users,
   formatDate,
+  onDraftReply,
 }: {
   tweet: Tweet
   users: Record<string, UserData>
   formatDate: (d?: string) => string
+  onDraftReply?: (tweetText: string, author: string) => void
 }) {
   const author = tweet.author_id ? users[tweet.author_id] : null
+  const authorUsername = author?.username || "unknown"
 
   return (
-    <div className="p-4 hover:bg-muted/30 transition-colors">
+    <div className="p-4 hover:bg-muted/30 transition-colors group">
       <div className="flex items-start gap-3">
         <div className="w-8 h-8 rounded-full bg-muted flex-shrink-0 flex items-center justify-center text-xs font-bold text-muted-foreground">
           {author?.name?.charAt(0) || "U"}
@@ -228,20 +241,31 @@ function TweetCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-foreground truncate">{author?.name || "User"}</span>
-            <span className="text-xs text-muted-foreground truncate">@{author?.username || "unknown"}</span>
+            <span className="text-xs text-muted-foreground truncate">@{authorUsername}</span>
             <span className="text-xs text-muted-foreground">{formatDate(tweet.created_at)}</span>
           </div>
           <p className="text-sm text-foreground mt-1 leading-relaxed whitespace-pre-wrap break-words">{tweet.text}</p>
-          {tweet.public_metrics && (
-            <div className="flex items-center gap-4 mt-2">
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <HeartIcon /> {tweet.public_metrics.like_count}
-              </span>
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                <RetweetIcon /> {tweet.public_metrics.retweet_count}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-4 mt-2">
+            {tweet.public_metrics && (
+              <>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <HeartIcon /> {tweet.public_metrics.like_count}
+                </span>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <RetweetIcon /> {tweet.public_metrics.retweet_count}
+                </span>
+              </>
+            )}
+            {onDraftReply && (
+              <button
+                onClick={() => onDraftReply(tweet.text, authorUsername)}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+                aria-label="Draft AI reply"
+              >
+                <ReplyIcon /> AI Reply
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
