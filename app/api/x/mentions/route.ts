@@ -3,6 +3,7 @@ import { getXClient } from "@/lib/x-client"
 export async function GET() {
   try {
     const client = getXClient()
+
     const me = await client.v2.me()
     const userId = me.data.id
 
@@ -19,8 +20,14 @@ export async function GET() {
       username: me.data.username,
     })
   } catch (error: unknown) {
+    const code = error && typeof error === "object" && "code" in error ? (error as { code: number }).code : 0
+    if (code === 401 || code === 403) {
+      return Response.json({
+        error: "free_tier",
+        message: "Mentions access requires X API Basic plan or higher. Posting tweets is available on the Free tier.",
+      }, { status: 403 })
+    }
     const message = error instanceof Error ? error.message : "Failed to fetch mentions"
-    console.error("X Mentions error:", message)
     return Response.json({ error: message }, { status: 500 })
   }
 }
