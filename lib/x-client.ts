@@ -135,18 +135,11 @@ async function throttle() {
 }
 
 // ─── User ID cache ───
-// Set X_USER_ID env var to skip the /users/me call entirely (saves rate limit)
 let cachedUserId: string | null = null
 let cachedUserIdTimestamp = 0
 const USER_ID_TTL = 3_600_000 // 1 hour
 
 export async function getCachedUserId(): Promise<string> {
-  // Use env var if available to completely skip /users/me
-  const envUserId = process.env.X_USER_ID?.trim()
-  if (envUserId) {
-    return envUserId
-  }
-  
   if (cachedUserId && Date.now() - cachedUserIdTimestamp < USER_ID_TTL) {
     return cachedUserId
   }
@@ -212,22 +205,7 @@ export async function xFetch(
   }
 
   console.log(`[v0] xFetch: ${method} ${getEndpointKey(fullUrl)}`)
-  
-  // Add timeout to prevent hanging requests
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
-  
-  let response: Response
-  try {
-    response = await fetch(fullUrl, { ...options, signal: controller.signal })
-  } catch (err) {
-    clearTimeout(timeoutId)
-    if ((err as Error).name === "AbortError") {
-      throw new Error(`X API request timed out after 15 seconds`)
-    }
-    throw new Error(`X API network error: ${(err as Error).message}`)
-  }
-  clearTimeout(timeoutId)
+  const response = await fetch(fullUrl, options)
 
   // ALWAYS log rate limit headers from every response
   updateRateLimits(fullUrl, response.headers)
