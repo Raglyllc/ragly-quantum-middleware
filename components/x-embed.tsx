@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useEffect } from "react"
 import {
   TwitterIcon,
   RefreshIcon,
@@ -8,62 +8,19 @@ import {
   RetweetIcon,
   ReplyIcon,
 } from "@/components/icons"
-
-interface Tweet {
-  id: string
-  text: string
-  created_at?: string
-  public_metrics?: {
-    like_count: number
-    retweet_count: number
-    reply_count: number
-  }
-  author_id?: string
-}
-
-interface UserData {
-  id: string
-  name: string
-  username: string
-  profile_image_url?: string
-}
+import { useXStream } from "@/hooks/use-x-stream"
 
 export function XEmbed({
   onDraftReply,
 }: {
   onDraftReply?: (tweetText: string, author: string) => void
 }) {
-  const [tweets, setTweets] = useState<Tweet[]>([])
-  const [users, setUsers] = useState<Record<string, UserData>>({})
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [lastFetched, setLastFetched] = useState<Date | null>(null)
-
-  const fetchTimeline = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch("/api/x/timeline")
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to load timeline")
-      setTweets(data.data || [])
-      if (data.includes?.users) {
-        const userMap: Record<string, UserData> = {}
-        for (const u of data.includes.users) userMap[u.id] = u
-        setUsers(userMap)
-      }
-      setLastFetched(new Date())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load timeline")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const { tweets, users, loading, error, status, lastFetched, fromCache, refresh, forceRefresh } = useXStream("/api/x/timeline")
 
   // Auto-fetch once on mount
   useEffect(() => {
-    fetchTimeline()
-  }, [fetchTimeline])
+    refresh()
+  }, [refresh])
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return ""
@@ -101,11 +58,11 @@ export function XEmbed({
             <div className="flex items-center gap-2 mt-2">
               {lastFetched && (
                 <span className="text-xs text-muted-foreground">
-                  Updated {formatLastFetched()}
+                  {fromCache ? "Cached" : "Updated"} {formatLastFetched()}
                 </span>
               )}
               <button
-                onClick={fetchTimeline}
+                onClick={forceRefresh}
                 disabled={loading}
                 className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 aria-label="Refresh timeline"
@@ -143,7 +100,7 @@ export function XEmbed({
         {loading && tweets.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-2">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs text-muted-foreground">Loading tweets...</span>
+            <span className="text-xs text-muted-foreground">{status || "Loading tweets..."}</span>
           </div>
         ) : tweets.length === 0 && !error ? (
           <div className="p-6 text-center text-sm text-muted-foreground">

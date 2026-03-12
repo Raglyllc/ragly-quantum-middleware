@@ -1,35 +1,52 @@
-import { xFetch, getCachedUserId } from "@/lib/x-client"
+import { xFetch, getCachedUserId, getRateLimitDiagnostics } from "@/lib/x-client"
 
 export async function GET() {
-  try {
-    const userId = await getCachedUserId()
+  const encoder = new TextEncoder()
 
-    const params = new URLSearchParams({
-      max_results: "10",
-      "tweet.fields": "created_at,public_metrics,text",
-      expansions: "author_id",
-      "user.fields": "name,username,profile_image_url",
-    })
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+      }
 
-    const timeline = await xFetch(
-      `https://api.twitter.com/2/users/${userId}/tweets?${params.toString()}`
-    )
+      try {
+        send("status", { state: "connecting" })
 
-    return Response.json({
-      data: timeline.data || [],
-      includes: timeline.includes || {},
-    })
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Failed to fetch timeline"
-    console.error("X Timeline error:", message)
+        const userId = await getCachedUserId()
+        send("status", { state: "fetching", userId })
 
-    if (message.includes("401") || message.includes("403")) {
-      return Response.json({
-        error: "auth_error",
-        message: "Authentication failed. Please verify your X API credentials.",
-      }, { status: 401 })
-    }
+        const params = new URLSearchParams({
+          max_results: "10",
+          "tweet.fields": "created_at,public_metrics,text",
+          expansions: "author_id",
+          "user.fields": "name,username,profile_image_url",
+        })
 
-    return Response.json({ error: message }, { status: 500 })
-  }
+        const timeline = await xFetch(
+          `https://api.twitter.com/2/users/${userId}/tweets?${params.toString()}`
+        )
+
+        send("data", {
+          data: timeline.data || [],
+          includes: timeline.includes || {},
+        })
+
+        send("done", { success: true, rateLimits: getRateLimitDiagnostics() })
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Failed to fetch timeline"
+        console.error("[v0] X Timeline stream error:", message)
+        send("error", { message, rateLimits: getRateLimitDiagnostics() })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  })
 }

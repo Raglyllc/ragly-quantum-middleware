@@ -8,8 +8,8 @@ import {
   HeartIcon,
   RetweetIcon,
   ReplyIcon,
-  LoadingIcon,
 } from "@/components/icons"
+import { useXStream } from "@/hooks/use-x-stream"
 
 type TabType = "timeline" | "mentions"
 
@@ -42,56 +42,12 @@ export function XPanel({
   onDraftReply?: (tweetText: string, author: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<TabType>("timeline")
-  const [error, setError] = useState<string | null>(null)
-  const [timelineTweets, setTimelineTweets] = useState<Tweet[]>([])
-  const [mentionsTweets, setMentionsTweets] = useState<Tweet[]>([])
-  const [users, setUsers] = useState<Record<string, UserData>>({})
-  const [timelineLoading, setTimelineLoading] = useState(false)
-  const [mentionsLoading, setMentionsLoading] = useState(false)
 
-  const fetchTimeline = async () => {
-    setTimelineLoading(true)
-    setError(null)
-    try {
-      const res = await fetch("/api/x/timeline")
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to load timeline")
-      setTimelineTweets(data.data || [])
-      if (data.includes?.users) {
-        const userMap: Record<string, UserData> = { ...users }
-        for (const u of data.includes.users) userMap[u.id] = u
-        setUsers(userMap)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load timeline")
-    } finally {
-      setTimelineLoading(false)
-    }
-  }
-
-  const fetchMentions = async () => {
-    setMentionsLoading(true)
-    setError(null)
-    try {
-      const res = await fetch("/api/x/mentions")
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to load mentions")
-      setMentionsTweets(data.data || [])
-      if (data.includes?.users) {
-        const userMap: Record<string, UserData> = { ...users }
-        for (const u of data.includes.users) userMap[u.id] = u
-        setUsers(userMap)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load mentions")
-    } finally {
-      setMentionsLoading(false)
-    }
-  }
+  const timeline = useXStream("/api/x/timeline")
+  const mentions = useXStream("/api/x/mentions")
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab)
-    setError(null)
   }
 
   const formatDate = (dateStr?: string) => {
@@ -145,37 +101,43 @@ export function XPanel({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {error && (
-          <div className="m-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
-            {error}
-          </div>
-        )}
         {/* Timeline Tab */}
         {activeTab === "timeline" && (
           <div>
             <div className="flex items-center justify-between p-3 border-b border-border">
-              <span className="text-sm font-medium text-foreground">Your Tweets</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-foreground">Your Tweets</span>
+                {timeline.status && (
+                  <span className="text-xs text-muted-foreground animate-pulse">{timeline.status}</span>
+                )}
+              </div>
               <button
-                onClick={fetchTimeline}
-                disabled={timelineLoading}
+                onClick={timeline.forceRefresh}
+                disabled={timeline.loading}
                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 aria-label="Refresh timeline"
               >
                 <RefreshIcon />
               </button>
             </div>
-            {timelineLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            {timeline.error && (
+              <div className="m-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
+                {timeline.error}
               </div>
-            ) : timelineTweets.length === 0 ? (
+            )}
+            {timeline.loading && timeline.tweets.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs text-muted-foreground">{timeline.status || "Streaming..."}</span>
+              </div>
+            ) : timeline.tweets.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">
                 Click the refresh button above to load your tweets.
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {timelineTweets.map((tweet) => (
-                  <TweetCard key={tweet.id} tweet={tweet} users={users} formatDate={formatDate} onDraftReply={onDraftReply} />
+                {timeline.tweets.map((tweet) => (
+                  <TweetCard key={tweet.id} tweet={tweet} users={timeline.users} formatDate={formatDate} onDraftReply={onDraftReply} />
                 ))}
               </div>
             )}
@@ -186,28 +148,39 @@ export function XPanel({
         {activeTab === "mentions" && (
           <div>
             <div className="flex items-center justify-between p-3 border-b border-border">
-              <span className="text-sm font-medium text-foreground">Mentions</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-foreground">Mentions</span>
+                {mentions.status && (
+                  <span className="text-xs text-muted-foreground animate-pulse">{mentions.status}</span>
+                )}
+              </div>
               <button
-                onClick={fetchMentions}
-                disabled={mentionsLoading}
+                onClick={mentions.forceRefresh}
+                disabled={mentions.loading}
                 className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 aria-label="Refresh mentions"
               >
                 <RefreshIcon />
               </button>
             </div>
-            {mentionsLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            {mentions.error && (
+              <div className="m-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive">
+                {mentions.error}
               </div>
-            ) : mentionsTweets.length === 0 ? (
+            )}
+            {mentions.loading && mentions.tweets.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
+                <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs text-muted-foreground">{mentions.status || "Streaming..."}</span>
+              </div>
+            ) : mentions.tweets.length === 0 ? (
               <div className="p-6 text-center text-sm text-muted-foreground">
                 Click the refresh button above to load mentions.
               </div>
             ) : (
               <div className="divide-y divide-border">
-                {mentionsTweets.map((tweet) => (
-                  <TweetCard key={tweet.id} tweet={tweet} users={users} formatDate={formatDate} onDraftReply={onDraftReply} />
+                {mentions.tweets.map((tweet) => (
+                  <TweetCard key={tweet.id} tweet={tweet} users={mentions.users} formatDate={formatDate} onDraftReply={onDraftReply} />
                 ))}
               </div>
             )}
