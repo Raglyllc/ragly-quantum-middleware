@@ -9,6 +9,19 @@ export async function GET() {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
       }
 
+      // Check for required credentials
+      const missingCreds = []
+      if (!process.env.X_API_KEY) missingCreds.push("X_API_KEY")
+      if (!process.env.X_API_SECRET) missingCreds.push("X_API_SECRET")
+      if (!process.env.X_ACCESS_TOKEN) missingCreds.push("X_ACCESS_TOKEN")
+      if (!process.env.X_ACCESS_TOKEN_SECRET) missingCreds.push("X_ACCESS_TOKEN_SECRET")
+      
+      if (missingCreds.length > 0) {
+        send("error", { message: `Missing X API credentials: ${missingCreds.join(", ")}. Add them in Settings > Vars.` })
+        controller.close()
+        return
+      }
+
       try {
         send("status", { state: "connecting" })
 
